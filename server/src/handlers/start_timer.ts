@@ -1,14 +1,31 @@
+import { db } from '../db';
+import { timersTable } from '../db/schema';
 import { type StartTimerInput, type TimerState } from '../schema';
 
-export async function startTimer(input: StartTimerInput): Promise<TimerState> {
-    // This is a placeholder declaration! Real code should be implemented here.
-    // The goal of this handler is creating a new timer with specified duration and starting it.
-    // It should persist the timer state in the database with current timestamp as started_at.
-    return Promise.resolve({
-        id: 1, // Placeholder ID
+export const startTimer = async (input: StartTimerInput): Promise<TimerState> => {
+  try {
+    const now = new Date();
+    
+    // Insert new timer record with specified duration and start it immediately
+    const result = await db.insert(timersTable)
+      .values({
         remaining_seconds: input.duration_seconds,
         is_running: true,
-        started_at: new Date(), // Current timestamp when starting
-        created_at: new Date() // Placeholder date
-    } as TimerState);
-}
+        started_at: now
+      })
+      .returning()
+      .execute();
+
+    const timer = result[0];
+    return {
+      id: timer.id,
+      remaining_seconds: timer.remaining_seconds,
+      is_running: timer.is_running,
+      started_at: timer.started_at,
+      created_at: timer.created_at
+    };
+  } catch (error) {
+    console.error('Timer creation failed:', error);
+    throw error;
+  }
+};

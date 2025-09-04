@@ -1,18 +1,53 @@
+import { db } from '../db';
+import { timersTable } from '../db/schema';
 import { type GetTimerInput, type TimerState } from '../schema';
+import { eq } from 'drizzle-orm';
 
-export async function resumeTimer(input: GetTimerInput): Promise<TimerState> {
-    // This is a placeholder declaration! Real code should be implemented here.
-    // The goal of this handler is resuming a paused timer.
-    // It should:
-    // - Set is_running to true
-    // - Set started_at to current timestamp
-    // - Keep the current remaining_seconds value unchanged
-    // Should only work if timer is currently paused (is_running = false)
-    return Promise.resolve({
-        id: input.id,
-        remaining_seconds: 180, // Placeholder - should use actual remaining time from DB
+export const resumeTimer = async (input: GetTimerInput): Promise<TimerState> => {
+  try {
+    // First, get the current timer state
+    const existingTimers = await db.select()
+      .from(timersTable)
+      .where(eq(timersTable.id, input.id))
+      .execute();
+
+    if (existingTimers.length === 0) {
+      throw new Error(`Timer with id ${input.id} not found`);
+    }
+
+    const timer = existingTimers[0];
+
+    // Check if timer is already running
+    if (timer.is_running) {
+      throw new Error(`Timer with id ${input.id} is already running`);
+    }
+
+    // Check if timer has time remaining (not finished)
+    if (timer.remaining_seconds <= 0) {
+      throw new Error(`Timer with id ${input.id} has already finished`);
+    }
+
+    // Resume the timer by setting is_running to true and started_at to current time
+    const result = await db.update(timersTable)
+      .set({
         is_running: true,
-        started_at: new Date(), // Current timestamp when resuming
-        created_at: new Date() // Placeholder date
-    } as TimerState);
-}
+        started_at: new Date() // Set current timestamp when resuming
+      })
+      .where(eq(timersTable.id, input.id))
+      .returning()
+      .execute();
+
+    // Return the updated timer state
+    const updatedTimer = result[0];
+    return {
+      id: updatedTimer.id,
+      remaining_seconds: updatedTimer.remaining_seconds,
+      is_running: updatedTimer.is_running,
+      started_at: updatedTimer.started_at,
+      created_at: updatedTimer.created_at
+    };
+  } catch (error) {
+    console.error('Timer resume failed:', error);
+    throw error;
+  }
+};
